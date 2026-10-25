@@ -1,0 +1,76 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "3"
+
+services:
+  # 1. Redis Message Broker & State Persistence
+  redis:
+    image: redis:7-alpine
+    container_name: raahcar_redis
+    restart: unless-stopped
+    logging: *default-logging
+    ports: 
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  # 2. Celery Worker (Image Processing & Publishing)
+  celery_worker:
+    build: .
+    container_name: raahcar_celery_worker
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MAIN_SERVER_URL=${MAIN_SERVER_URL:-https://raahcar.com}
+      - INGESTION_API_KEY=${INGESTION_API_KEY:-raahcar-secure-bot-key-2026}
+    volumes:
+      - .:/app
+    command: celery -A celery_app worker --loglevel=info --concurrency=2
+
+  # 3. Celery Beat (Automated Daily Scheduler - triggers daily at 08:00 AM)
+  celery_beat:
+    build: .
+    container_name: raahcar_celery_beat
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      - redis
+      - celery_worker
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MAIN_SERVER_URL=${MAIN_SERVER_URL:-https://raahcar.com}
+      - INGESTION_API_KEY=${INGESTION_API_KEY:-raahcar-secure-bot-key-2026}
+    volumes:
+      - .:/app
+    command: celery -A celery_app beat --loglevel=info
+
+  # 4. Flower Web Dashboard (Port 5555 - Real-time Celery Monitoring)
+  flower:
+    build: .
+    container_name: raahcar_flower
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      - redis
+      - celery_worker
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - FLOWER_BASIC_AUTH=${FLOWER_BASIC_AUTH:-admin:raahcar2026}
+    volumes:
+      - .:/app
+    command: celery -A celery_app flower --port=5555 --basic_auth=${FLOWER_BASIC_AUTH:-admin:raahcar2026}
+
+volumes:
+  redis_data:

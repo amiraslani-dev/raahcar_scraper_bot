@@ -1,0 +1,60 @@
+# ==============================================================================
+# Raahcar Scraper Bot - Docker Ignore Rules
+# Excludes unnecessary files to optimize Docker build context and image size
+# ==============================================================================
+
+# Git & Documentation
+.git/
+.github/
+.gitignore
+.dockerignore
+README.md
+docs/
+
+# Python Virtual Environments & Cache
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Secrets & Environment Configuration
+.env
+.env.*
+!.env.example
+
+# Datasets, Scraped Image Dumps & Training Artifacts (~370MB+)
+dataset/
+images/
+preview/
+runs/
+yolov8*.pt
+
+# Runtime Temp Storage & Schedules
+temp_images/*
+!temp_images/.gitkeep
+celerybeat-schedule
+celerybeat-schedule.*
+celerybeat.pid
+dump.rdb
+*.log
+logs/
+
+# IDE & OS Artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+[Dd]esktop.ini
+
+# Docker config files inside the container
+Dockerfile
+docker-compose*.yml

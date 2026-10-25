@@ -1,0 +1,90 @@
+# ==============================================================================
+# Raahcar Scraper Bot - Git Ignore Rules
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Python Cache, Bytecode & Testing
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ------------------------------------------------------------------------------
+# 2. Virtual Environments & Packaging
+# ------------------------------------------------------------------------------
+.venv/
+venv/
+ENV/
+env/
+.env/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ------------------------------------------------------------------------------
+# 3. Environment Variables & Secrets
+# ------------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# ------------------------------------------------------------------------------
+# 4. Scraper Temporary Data, Raw Dumps & Image Caches
+# ------------------------------------------------------------------------------
+temp_images/*
+!temp_images/.gitkeep
+
+# Exclude local raw scraped images & preview outputs
+images/
+preview/
+*.tmp
+*.temp
+
+# ------------------------------------------------------------------------------
+# 5. Machine Learning Datasets & Training Runs (YOLO / Ultralytics)
+# ------------------------------------------------------------------------------
+dataset/
+runs/
+# Default pre-trained base models automatically downloaded by Ultralytics
+yolov8n.pt
+yolov8s.pt
+yolov8m.pt
+yolov8l.pt
+yolov8x.pt
+
+# ------------------------------------------------------------------------------
+# 6. Celery, Redis & Runtime Logs
+# ------------------------------------------------------------------------------
+celerybeat-schedule
+celerybeat-schedule.*
+celerybeat.pid
+dump.rdb
+*.log
+logs/
+
+# ------------------------------------------------------------------------------
+# 7. IDE, Editors & Operating System Artifacts
+# ------------------------------------------------------------------------------
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
