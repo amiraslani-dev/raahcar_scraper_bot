@@ -124,6 +124,12 @@ def parse_bama_ad(raw_ad):
         return None
 
     code = detail.get("code")
+    raw_ad_url = detail.get("url")
+    if raw_ad_url:
+        ad_url = raw_ad_url if raw_ad_url.startswith("http") else f"https://bama.ir{raw_ad_url}"
+    else:
+        ad_url = f"https://bama.ir/car/detail-{code}"
+
     brand_fa = detail.get("brand_fa") or detail.get("brand") or "نامشخص"
     title = detail.get("title", "")
     model_name = extract_model_name(title, brand_fa)
@@ -148,7 +154,7 @@ def parse_bama_ad(raw_ad):
     description = detail.get("description") or ""
 
     return {
-        "source_id": f"bama_{code}",
+        "source_id": ad_url,
         "brand_name": brand_fa,
         "model_name": model_name,
         "tip_name": trim,

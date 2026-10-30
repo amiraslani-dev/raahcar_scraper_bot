@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import uuid
 import shutil
 import logging
@@ -26,15 +27,26 @@ logger = logging.getLogger(__name__)
 def download_image(img_url, dest_path):
     """
     Downloads image from URL with browser headers.
+    Falls back to base URL if resize service returns an error.
     """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         "Referer": "https://bama.ir"
     }
-    req = urllib.request.Request(img_url, headers=headers)
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        with open(dest_path, "wb") as f:
-            f.write(resp.read())
+    try:
+        req = urllib.request.Request(img_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            with open(dest_path, "wb") as f:
+                f.write(resp.read())
+    except urllib.error.HTTPError:
+        base_url = img_url.split("?")[0]
+        if base_url != img_url:
+            req = urllib.request.Request(base_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                with open(dest_path, "wb") as f:
+                    f.write(resp.read())
+        else:
+            raise
     return dest_path
 
 
@@ -46,7 +58,8 @@ def publish_ad_with_processed_images(ad_data, logo_path=LOGO_PATH):
     source_id = ad_data.get("source_id", "temp_ad")
     image_urls = ad_data.get("image_urls", [])
 
-    ad_temp_dir = os.path.join(TEMP_IMAGE_DIR, source_id)
+    safe_folder = re.sub(r'[^\w\-]', '_', str(source_id))[-35:] or uuid.uuid4().hex[:8]
+    ad_temp_dir = os.path.join(TEMP_IMAGE_DIR, safe_folder)
     raw_dir = os.path.join(ad_temp_dir, "raw")
     proc_dir = os.path.join(ad_temp_dir, "processed")
 
@@ -98,7 +111,7 @@ def publish_ad_with_processed_images(ad_data, logo_path=LOGO_PATH):
                 data=payload,
                 files=files,
                 headers=headers,
-                timeout=30
+                timeout=120
             )
 
             if response.status_code in [200, 201]:
