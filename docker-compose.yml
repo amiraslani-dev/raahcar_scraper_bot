@@ -4,6 +4,12 @@ x-logging: &default-logging
     max-size: "50m"
     max-file: "3"
 
+x-build: &default-build
+  context: .
+  args:
+    PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirror-pypi.runflare.com/simple}
+    PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-mirror-pypi.runflare.com}
+
 services:
   # 1. Redis Message Broker & State Persistence
   redis:
@@ -19,7 +25,7 @@ services:
 
   # 2. Celery Worker (Image Processing & Publishing)
   celery_worker:
-    build: .
+    build: *default-build
     container_name: raahcar_celery_worker
     restart: unless-stopped
     logging: *default-logging
@@ -37,7 +43,7 @@ services:
 
   # 3. Celery Beat (Automated Daily Scheduler - triggers daily at 08:00 AM)
   celery_beat:
-    build: .
+    build: *default-build
     container_name: raahcar_celery_beat
     restart: unless-stopped
     logging: *default-logging
@@ -56,7 +62,7 @@ services:
 
   # 4. Flower Web Dashboard (Port 5555 - Real-time Celery Monitoring)
   flower:
-    build: .
+    build: *default-build
     container_name: raahcar_flower
     restart: unless-stopped
     logging: *default-logging
