@@ -26,6 +26,7 @@ services:
   # 2. Celery Worker (Image Processing & Publishing)
   celery_worker:
     build: *default-build
+    image: raahcar_scraper_bot:latest
     container_name: raahcar_celery_worker
     restart: unless-stopped
     logging: *default-logging
@@ -43,7 +44,7 @@ services:
 
   # 3. Celery Beat (Automated Daily Scheduler - triggers daily at 08:00 AM)
   celery_beat:
-    build: *default-build
+    image: raahcar_scraper_bot:latest
     container_name: raahcar_celery_beat
     restart: unless-stopped
     logging: *default-logging
@@ -62,7 +63,7 @@ services:
 
   # 4. Flower Web Dashboard (Port 5555 - Real-time Celery Monitoring)
   flower:
-    build: *default-build
+    image: raahcar_scraper_bot:latest
     container_name: raahcar_flower
     restart: unless-stopped
     logging: *default-logging
