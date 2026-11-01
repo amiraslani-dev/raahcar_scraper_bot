@@ -66,6 +66,8 @@ flowchart TD
 
 ```text
 scraper_bot/
+├── .github/workflows/            # Automated GitHub Actions CI/CD workflows
+│   └── ci-cd.yml                 # Lint, test, docker build & VPS auto-deploy pipeline
 ├── assets/                       # AI models, default logos, and visual assets
 │   ├── cars_best_v26.pt          # YOLOv8 Car & Contextual plate detector (~20 MB)
 │   ├── plate_covered_yolov8n.pt  # Dealer / covered plate detector (~6 MB)
@@ -73,6 +75,9 @@ scraper_bot/
 │   ├── plate_slot_yolov8n.onnx   # Plate slot detector (~12 MB)
 │   ├── plate_yolo_iran.onnx      # Iranian standard plate detector (~12 MB)
 │   └── logo.png                  # Plate badge replacement logo
+├── tests/                        # Automated smoke & pipeline unit tests
+│   ├── __init__.py
+│   └── test_pipeline.py          # AI models, config, and vision pipeline tests
 ├── config.py                     # Central configuration & path resolvers
 ├── scraper.py                    # Marketplace scraper & quota logic
 ├── image_processor.py            # YOLOv8/ONNX detection, branding, SEO zoom
@@ -250,6 +255,38 @@ You can inspect:
 - **Never commit `.env`**: Always configure production secrets via deployment variables or secret managers.
 - **Firewall Flower & Redis**: In production, do NOT expose ports `6379` (Redis) and `5555` (Flower) to public traffic. Bind them to `127.0.0.1` or keep them behind a reverse proxy (e.g. Nginx with SSL & IP whitelisting).
 - **Graceful Retries**: Network failures automatically trigger exponential backoff retries (`max_retries=5`, backoff factor up to 10 minutes) before marking a task as failed.
+
+---
+
+## 🚀 CI/CD & Automated Deployment (GitHub Actions)
+
+The repository includes an enterprise-ready GitHub Actions pipeline (`.github/workflows/ci-cd.yml`) that guarantees code quality and automated zero-downtime deployment:
+
+```mermaid
+flowchart LR
+    A[git push / PR] --> B[1. Ruff Lint & Syntax]
+    B --> C[2. Pipeline & Model Tests]
+    C --> D[3. Docker Buildx & Cache]
+    D -->|Push to main only| E[4. SSH Deploy to VPS]
+    E --> F[docker compose up -d]
+```
+
+### 1. Pipeline Stages
+- **Lint Stage**: Uses Ruff for instant AST-level syntax and broken import checks.
+- **Test Stage**: Installs OpenCV/ONNX dependencies and executes `tests/test_pipeline.py` (verifying model weights, config, and synthetic image transformation).
+- **Docker Stage**: Builds the Docker container with GitHub Actions Layer Cache (`type=gha`) to ensure the Dockerfile compiles without runtime errors.
+- **Deploy Stage**: Connects securely via SSH to the production VPS, pulls the latest commits, updates containers via `docker compose up -d --remove-orphans`, prunes dangling images, and verifies health status.
+
+### 2. Required GitHub Secrets
+Under your GitHub Repository **Settings -> Secrets and variables -> Actions**, add:
+
+| Secret Name | Description | Example |
+|---|---|---|
+| `SERVER_HOST` | Production VPS IP address or hostname | `185.x.x.x` |
+| `SERVER_USER` | Remote SSH username | `deploy` or `root` |
+| `SERVER_SSH_KEY` | Private SSH Key (ed25519 or RSA) | `-----BEGIN OPENSSH PRIVATE KEY...` |
+| `SERVER_PORT` | SSH Port (optional, defaults to 6579) | `6579` or `22` |
+| `SCRAPER_PROJECT_PATH` | Path to scraper_bot directory on VPS | `/opt/raahcar_scraper_bot` or `/home/ubuntu/raahcar/scraper_bot` |
 
 ---
 
