@@ -7,4 +7,5 @@ celery>=5.3.6
 redis>=5.0.0
 ultralytics>=8.2.0
 onnxruntime>=1.16.0
+onnx>=1.14.0
 flower>=2.0.1
