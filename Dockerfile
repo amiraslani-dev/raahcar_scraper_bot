@@ -15,10 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy and install python dependencies
 COPY requirements.txt /app/
-RUN pip install --no-cache-dir \
-    -i https://mirror-pypi.runflare.com/simple \
-    --trusted-host mirror-pypi.runflare.com \
-    -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY . /app/
