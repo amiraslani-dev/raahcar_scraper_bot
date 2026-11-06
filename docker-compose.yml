@@ -7,8 +7,9 @@ x-logging: &default-logging
 x-build: &default-build
   context: .
   args:
-    PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirror-pypi.runflare.com/simple}
-    PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-mirror-pypi.runflare.com}
+    PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+    PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-https://pypi.org/simple}
+    PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}
 
 services:
   # 1. Redis Message Broker & State Persistence

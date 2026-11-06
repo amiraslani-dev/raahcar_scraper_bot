@@ -13,16 +13,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Build arguments for PyPI mirror (defaults to official PyPI for global CI/CD runners)
-ARG PIP_INDEX_URL=https://pypi.org/simple
-ARG PIP_TRUSTED_HOST=pypi.org
+# Build arguments for PyPI mirror (defaults to high-speed Tsinghua mirror with official PyPI fallback)
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_EXTRA_INDEX_URL=https://pypi.org/simple
+ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 
 # Copy and install python dependencies
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir \
-    --default-timeout=120 \
+    --default-timeout=180 \
     -i ${PIP_INDEX_URL} \
+    --extra-index-url ${PIP_EXTRA_INDEX_URL} \
     --trusted-host ${PIP_TRUSTED_HOST} \
+    --trusted-host pypi.org \
     -r requirements.txt
 
 # Copy source code
