@@ -33,7 +33,7 @@ def dispatch_to_celery(fuel_quotas=None, delay_seconds=72):
         logger.info("👉 Make sure Redis is running (e.g. 'docker compose up -d' or 'redis-server').")
 
 
-def run_standalone_direct(fuel_quotas=None, delay_seconds=72):
+def run_standalone_direct(fuel_quotas=None, delay_seconds=72, allowed_brands=None, brand_aliases=None):
     """
     Direct standalone execution without Celery/Redis.
     """
@@ -49,9 +49,14 @@ def run_standalone_direct(fuel_quotas=None, delay_seconds=72):
     from publisher import publish_ad_with_processed_images
 
     start_time = time.time()
-    ads = fetch_all_bama_ads(fuel_quotas=fuel_quotas, shuffle=True)
+    ads = fetch_all_bama_ads(
+        fuel_quotas=fuel_quotas,
+        shuffle=True,
+        allowed_brands=allowed_brands,
+        brand_aliases=brand_aliases
+    )
     fetch_duration = time.time() - start_time
-    logger.info(f"⚡ Fetched {len(ads)} ads in {fetch_duration:.2f} seconds.")
+    logger.info(f"⚡ Fetched {len(ads)} valid ads in {fetch_duration:.2f} seconds.")
 
     if not ads:
         logger.warning("No ads were fetched. Exiting.")
@@ -104,7 +109,16 @@ if __name__ == "__main__":
                 cfg = fetch_remote_bot_config()
                 admin_quotas = cfg.get("fuel_quotas") if cfg else None
                 admin_delay = cfg.get("interval_seconds") if cfg else args.delay
+                admin_allowed_brands = cfg.get("allowed_brands") if cfg else None
+                admin_brand_aliases = cfg.get("brand_aliases") if cfg else None
             except Exception:
                 admin_quotas = None
                 admin_delay = args.delay
-            run_standalone_direct(fuel_quotas=admin_quotas, delay_seconds=admin_delay)
+                admin_allowed_brands = None
+                admin_brand_aliases = None
+            run_standalone_direct(
+                fuel_quotas=admin_quotas,
+                delay_seconds=admin_delay,
+                allowed_brands=admin_allowed_brands,
+                brand_aliases=admin_brand_aliases
+            )

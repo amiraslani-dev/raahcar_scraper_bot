@@ -130,7 +130,8 @@ def parse_bama_ad(raw_ad):
     else:
         ad_url = f"https://bama.ir/car/detail-{code}"
 
-    brand_fa = detail.get("brand_fa") or detail.get("brand") or "نامشخص"
+    brand_slug = detail.get("brand")
+    brand_fa = detail.get("brand_fa") or brand_slug or "نامشخص"
     title = detail.get("title", "")
     model_name = extract_model_name(title, brand_fa)
     trim = detail.get("trim") or detail.get("subtitle") or "استاندارد"
@@ -156,6 +157,7 @@ def parse_bama_ad(raw_ad):
     return {
         "source_id": ad_url,
         "brand_name": brand_fa,
+        "brand_slug": brand_slug,
         "model_name": model_name,
         "tip_name": trim,
         "city_name": clean_city(detail.get("location")),
@@ -175,12 +177,61 @@ def parse_bama_ad(raw_ad):
     }
 
 
-def fetch_ads_by_fuel(fuel_key, target_count, page_size=24, seen_ids=None):
+def normalize_brand_text(text):
+    if not text:
+        return ""
+    import re
+    t = str(text)
+    t = t.replace('ي', 'ی').replace('ك', 'ک').replace('ة', 'ه').replace('ؤ', 'و').replace('إ', 'ا').replace('أ', 'ا').replace('آ', 'ا')
+    fa_digits = '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩'
+    en_digits = '01234567890123456789'
+    t = t.translate(str.maketrans(fa_digits, en_digits))
+    t = re.sub(r'[\u200c\u200d\u200e\u200f\u00a0\-_/\\()\[\],،.]', ' ', t)
+    return re.sub(r'\s+', ' ', t).strip().lower()
+
+
+def resolve_brand_alias_local(raw_brand, brand_aliases_text):
+    if not raw_brand or not brand_aliases_text:
+        return raw_brand
+    norm_raw = normalize_brand_text(raw_brand)
+    for line in brand_aliases_text.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or ':' not in line:
+            continue
+        src, target = line.split(':', 1)
+        if normalize_brand_text(src) == norm_raw:
+            return target.strip()
+    return raw_brand
+
+
+def is_brand_allowed(raw_brand, brand_slug=None, allowed_brands_set=None, brand_aliases_text=None):
+    if not allowed_brands_set:
+        return True
+
+    resolved_brand = resolve_brand_alias_local(raw_brand, brand_aliases_text)
+    norm_resolved = normalize_brand_text(resolved_brand)
+    norm_raw = normalize_brand_text(raw_brand)
+
+    if norm_resolved in allowed_brands_set or norm_raw in allowed_brands_set:
+        return True
+
+    if brand_slug:
+        norm_slug = normalize_brand_text(brand_slug)
+        if norm_slug in allowed_brands_set:
+            return True
+
+    return False
+
+
+def fetch_ads_by_fuel(fuel_key, target_count, page_size=24, seen_ids=None, allowed_brands=None, brand_aliases=None):
     """
     Fetches a specific count of ads for a given fuel type from Bama API.
+    Filters out unknown brands in real time to ensure the target_count quota is 100% fulfilled.
     """
     if seen_ids is None:
         seen_ids = set()
+
+    allowed_set = {normalize_brand_text(b) for b in allowed_brands} if allowed_brands else None
 
     base_url = "https://bama.ir/cad/api/search"
     params = {
@@ -196,9 +247,9 @@ def fetch_ads_by_fuel(fuel_key, target_count, page_size=24, seen_ids=None):
 
     collected = []
     page = 0
-    max_pages = (target_count // page_size) + 5
+    max_pages = max((target_count // page_size) * 3, 50)
 
-    logger.info(f"Fetching {target_count} ads for fuel '{fuel_key}'...")
+    logger.info(f"Fetching {target_count} ads for fuel '{fuel_key}' (Allowed brands filtering: {'Active' if allowed_set else 'Off'})...")
 
     while len(collected) < target_count and page <= max_pages:
         params["pageIndex"] = page
@@ -218,7 +269,17 @@ def fetch_ads_by_fuel(fuel_key, target_count, page_size=24, seen_ids=None):
                 if ad_item.get("type") != "ad":
                     continue
                 parsed = parse_bama_ad(ad_item)
-                if parsed and parsed["source_id"] not in seen_ids:
+                if not parsed:
+                    continue
+
+                # Brand validation check:
+                raw_brand = parsed.get("brand_name")
+                raw_slug = parsed.get("brand_slug")
+                if allowed_set and not is_brand_allowed(raw_brand, raw_slug, allowed_set, brand_aliases):
+                    logger.debug(f"⏭ [Filter] Skipping ad with unknown brand '{raw_brand}' ({raw_slug}) to maintain exact quota...")
+                    continue
+
+                if parsed["source_id"] not in seen_ids:
                     seen_ids.add(parsed["source_id"])
                     collected.append(parsed)
                     if len(collected) >= target_count:
@@ -231,7 +292,7 @@ def fetch_ads_by_fuel(fuel_key, target_count, page_size=24, seen_ids=None):
             logger.exception(f"Error fetching fuel [{fuel_key}] page {page}: {e}")
             break
 
-    logger.info(f"Collected {len(collected)}/{target_count} ads for fuel '{fuel_key}'.")
+    logger.info(f"Collected {len(collected)}/{target_count} valid ads for fuel '{fuel_key}'.")
     return collected
 
 
@@ -249,7 +310,7 @@ FUEL_KEY_MAP = {
 }
 
 
-def fetch_all_bama_ads(fuel_quotas=None, shuffle=True):
+def fetch_all_bama_ads(fuel_quotas=None, shuffle=True, allowed_brands=None, brand_aliases=None):
     """
     Fetches ads based on specified fuel quotas (e.g. 260 petrol, 20 CNG, 10 electric, 10 hybrid)
     and mixes them for natural staggered publishing.
@@ -264,10 +325,16 @@ def fetch_all_bama_ads(fuel_quotas=None, shuffle=True):
         if count <= 0:
             continue
         fuel_key = FUEL_KEY_MAP.get(str(raw_fuel_key).strip(), raw_fuel_key)
-        ads = fetch_ads_by_fuel(fuel_key=fuel_key, target_count=count, seen_ids=seen_ids)
+        ads = fetch_ads_by_fuel(
+            fuel_key=fuel_key,
+            target_count=count,
+            seen_ids=seen_ids,
+            allowed_brands=allowed_brands,
+            brand_aliases=brand_aliases
+        )
         all_ads.extend(ads)
 
-    logger.info(f"Total collected ads across all fuel types: {len(all_ads)}")
+    logger.info(f"Total collected valid ads across all fuel types: {len(all_ads)}")
 
     if shuffle:
         random.shuffle(all_ads)

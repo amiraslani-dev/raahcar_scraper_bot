@@ -105,8 +105,16 @@ def start_daily_scraping_batch_task(fuel_quotas=None, delay_seconds=None):
     total_target = sum(fuel_quotas.values())
     logger.info(f"🚀 [Scraper Task] Fetching {total_target} ads across fuel quotas: {fuel_quotas}")
 
-    ads = fetch_all_bama_ads(fuel_quotas=fuel_quotas, shuffle=True)
-    logger.info(f"⚡ [Scraper Task] Fetched {len(ads)} ads. Enqueuing with randomized delays ({min_interval}s - {max_interval}s)...")
+    allowed_brands = remote_cfg.get("allowed_brands") if remote_cfg else None
+    brand_aliases = remote_cfg.get("brand_aliases") if remote_cfg else None
+
+    ads = fetch_all_bama_ads(
+        fuel_quotas=fuel_quotas,
+        shuffle=True,
+        allowed_brands=allowed_brands,
+        brand_aliases=brand_aliases
+    )
+    logger.info(f"⚡ [Scraper Task] Fetched {len(ads)} valid ads. Enqueuing with randomized delays ({min_interval}s - {max_interval}s)...")
 
     import random
     scheduled_count = 0

@@ -12,11 +12,11 @@ if _CURR_DIR not in sys.path:
     sys.path.insert(0, _CURR_DIR)
 
 try:
-    from config import INGEST_ENDPOINT, INGESTION_API_KEY, TEMP_IMAGE_DIR, LOGO_PATH
+    from config import INGEST_ENDPOINT, INGESTION_API_KEY, TEMP_IMAGE_DIR, LOGO_PATH, WATERMARK_LOGO_PATH
     from image_processor import process_image_file
 except ImportError:
     try:
-        from scraper_bot.config import INGEST_ENDPOINT, INGESTION_API_KEY, TEMP_IMAGE_DIR, LOGO_PATH
+        from scraper_bot.config import INGEST_ENDPOINT, INGESTION_API_KEY, TEMP_IMAGE_DIR, LOGO_PATH, WATERMARK_LOGO_PATH
         from scraper_bot.image_processor import process_image_file
     except ImportError:
         raise
@@ -50,10 +50,11 @@ def download_image(img_url, dest_path):
     return dest_path
 
 
-def publish_ad_with_processed_images(ad_data, logo_path=LOGO_PATH):
+def publish_ad_with_processed_images(ad_data, logo_path=LOGO_PATH, watermark_path=WATERMARK_LOGO_PATH):
     """
-    Downloads images, overlays logo on license plates, applies 5% SEO zoom,
-    exports as optimized WebP with random filenames, and pushes ad to main server.
+    Downloads images, overlays logo on license plates, applies top-right Raahcar watermark
+    to EVERY image, applies 5% SEO zoom, exports as optimized WebP with random filenames,
+    and pushes ad to main server.
     """
     source_id = ad_data.get("source_id", "temp_ad")
     image_urls = ad_data.get("image_urls", [])
@@ -78,7 +79,7 @@ def publish_ad_with_processed_images(ad_data, logo_path=LOGO_PATH):
                 proc_path = os.path.join(proc_dir, f"{rand_id}.webp")
 
                 download_image(url, raw_path)
-                res_path = process_image_file(raw_path, proc_path, logo_path=logo_path)
+                res_path = process_image_file(raw_path, proc_path, logo_path=logo_path, watermark_path=watermark_path)
                 if res_path and os.path.exists(res_path):
                     processed_file_paths.append(res_path)
                 else:

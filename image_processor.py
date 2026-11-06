@@ -291,207 +291,204 @@ def process_image_file(input_path, output_path, logo_path=None, watermark_path=N
             cv_img = cv2.resize(cv_img, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
             H, W = cv_img.shape[:2]
 
-        m_cars, m_cov, m_iran, m_det = get_models()
-        if not any([m_cars, m_cov, m_iran, m_det]):
-            logger.error("No plate detection models available.")
-            return None
+        result_img = cv_img.copy()
 
-        car_boxes = []
-        candidates = []
+        try:
+            m_cars, m_cov, m_iran, m_det = get_models()
+            car_boxes = []
+            candidates = []
 
-        # 1. Primary Car Context Model (cars_best_v26)
-        if m_cars is not None:
-            try:
-                r_cars = m_cars(cv_img, imgsz=960, conf=0.18, verbose=False)[0]
-                for b in r_cars.boxes:
-                    cls_name = r_cars.names[int(b.cls[0])]
-                    conf = float(b.conf[0])
-                    box = [int(v) for v in b.xyxy[0].tolist()]
-                    if cls_name == "Car" and conf >= 0.35:
-                        car_boxes.append((conf, box))
-                    elif cls_name == "Plate" and conf >= 0.20:
-                        candidates.append(("cars_v26", conf, box))
-            except Exception as e:
-                logger.warning(f"Error in m_cars: {e}")
+            # 1. Primary Car Context Model (cars_best_v26)
+            if m_cars is not None:
+                try:
+                    r_cars = m_cars(cv_img, imgsz=960, conf=0.18, verbose=False)[0]
+                    for b in r_cars.boxes:
+                        cls_name = r_cars.names[int(b.cls[0])]
+                        conf = float(b.conf[0])
+                        box = [int(v) for v in b.xyxy[0].tolist()]
+                        if cls_name == "Car" and conf >= 0.35:
+                            car_boxes.append((conf, box))
+                        elif cls_name == "Plate" and conf >= 0.20:
+                            candidates.append(("cars_v26", conf, box))
+                except Exception as e:
+                    logger.warning(f"Error in m_cars: {e}")
 
-        # 2. Covered & Showroom Plate Model (Trained at 640)
-        if m_cov is not None:
-            try:
-                r_cov = m_cov(cv_img, imgsz=640, conf=0.18, verbose=False)[0]
-                for b in r_cov.boxes:
-                    conf = float(b.conf[0])
-                    box = [int(v) for v in b.xyxy[0].tolist()]
-                    candidates.append(("covered", conf, box))
-            except Exception as e:
-                logger.warning(f"Error in m_cov: {e}")
+            # 2. Covered & Showroom Plate Model (Trained at 640)
+            if m_cov is not None:
+                try:
+                    r_cov = m_cov(cv_img, imgsz=640, conf=0.18, verbose=False)[0]
+                    for b in r_cov.boxes:
+                        conf = float(b.conf[0])
+                        box = [int(v) for v in b.xyxy[0].tolist()]
+                        candidates.append(("covered", conf, box))
+                except Exception as e:
+                    logger.warning(f"Error in m_cov: {e}")
 
-        # 3. General Plate Detector (Trained at 640)
-        if m_det is not None:
-            try:
-                r_det = m_det(cv_img, imgsz=640, conf=0.22, verbose=False)[0]
-                for b in r_det.boxes:
-                    conf = float(b.conf[0])
-                    box = [int(v) for v in b.xyxy[0].tolist()]
-                    candidates.append(("detector", conf, box))
-            except Exception as e:
-                logger.warning(f"Error in m_det: {e}")
+            # 3. General Plate Detector (Trained at 640)
+            if m_det is not None:
+                try:
+                    r_det = m_det(cv_img, imgsz=640, conf=0.22, verbose=False)[0]
+                    for b in r_det.boxes:
+                        conf = float(b.conf[0])
+                        box = [int(v) for v in b.xyxy[0].tolist()]
+                        candidates.append(("detector", conf, box))
+                except Exception as e:
+                    logger.warning(f"Error in m_det: {e}")
 
-        # 3. Specialized Iranian Plate Model
-        if m_iran is not None:
-            try:
-                r_iran = m_iran(cv_img, imgsz=960, conf=0.28, verbose=False)[0]
-                for b in r_iran.boxes:
-                    conf = float(b.conf[0])
-                    box = [int(v) for v in b.xyxy[0].tolist()]
-                    candidates.append(("iran", conf, box))
-            except Exception as e:
-                logger.warning(f"Error in m_iran: {e}")
+            # 3. Specialized Iranian Plate Model
+            if m_iran is not None:
+                try:
+                    r_iran = m_iran(cv_img, imgsz=960, conf=0.28, verbose=False)[0]
+                    for b in r_iran.boxes:
+                        conf = float(b.conf[0])
+                        box = [int(v) for v in b.xyxy[0].tolist()]
+                        candidates.append(("iran", conf, box))
+                except Exception as e:
+                    logger.warning(f"Error in m_iran: {e}")
 
-        # Sort cars by area to identify primary foreground car
-        car_boxes.sort(key=lambda c: (c[1][2] - c[1][0]) * (c[1][3] - c[1][1]), reverse=True)
-        primary_car = car_boxes[0][1] if car_boxes else None
+            # Sort cars by area to identify primary foreground car
+            car_boxes.sort(key=lambda c: (c[1][2] - c[1][0]) * (c[1][3] - c[1][1]), reverse=True)
+            primary_car = car_boxes[0][1] if car_boxes else None
 
-        valid_candidates = []
-        for src, conf, box in candidates:
-            x1, y1, x2, y2 = box
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(W, x2), min(H, y2)
-            bw = x2 - x1
-            bh = y2 - y1
+            valid_candidates = []
+            for src, conf, box in candidates:
+                x1, y1, x2, y2 = box
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(W, x2), min(H, y2)
+                bw = x2 - x1
+                bh = y2 - y1
 
-            if bw < 20 or bh < 8:
-                continue
+                if bw < 20 or bh < 8:
+                    continue
 
-            # Reject camera watermark text at extreme bottom corner
-            if y2 > 0.94 * H and (x2 < 0.24 * W or x1 > 0.76 * W) and bh < 0.05 * H:
-                continue
+                # Reject camera watermark text at extreme bottom corner
+                if y2 > 0.94 * H and (x2 < 0.24 * W or x1 > 0.76 * W) and bh < 0.05 * H:
+                    continue
 
-            # Reject absurd proportions (e.g. whole hood or side of car)
-            if bw > 0.65 * W or bh > 0.25 * H:
-                continue
+                # Reject absurd proportions (e.g. whole hood or side of car)
+                if bw > 0.65 * W or bh > 0.25 * H:
+                    continue
 
-            # Aspect ratio check: Iranian plates and covers are horizontal (1.25 to 7.5).
-            # Tilted plates reach 1.3 to 2.0; wide closeups reach 5.0 to 7.0.
-            # Never allow ar < 1.25 (prevents vertical wheels/tires, headlights, or square gadgets).
-            ar = bw / float(bh)
-            if ar < 1.25 or ar > 7.5:
-                continue
+                # Aspect ratio check: Iranian plates and covers are horizontal (1.25 to 7.5).
+                # Tilted plates reach 1.3 to 2.0; wide closeups reach 5.0 to 7.0.
+                # Never allow ar < 1.25 (prevents vertical wheels/tires, headlights, or square gadgets).
+                ar = bw / float(bh)
+                if ar < 1.25 or ar > 7.5:
+                    continue
 
-            crop = cv_img[y1:y2, x1:x2]
-            if crop.size == 0:
-                continue
+                crop = cv_img[y1:y2, x1:x2]
+                if crop.size == 0:
+                    continue
 
-            # 1. Reject dark plastic / turned-off odometer LCD / AC vents:
-            # Real Iranian plates and showroom covers have reflective white/yellow/silver backgrounds.
-            # Hazard buttons, AC vents, and cluster plastic have median < 48 and mean < 58.
-            gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-            p80 = float(np.percentile(gray, 80))
-            med_val = float(np.median(gray))
-            mean_val = float(np.mean(gray))
-            if p80 < 70 or (med_val < 48 and mean_val < 58):
-                continue
+                # 1. Reject dark plastic / turned-off odometer LCD / AC vents:
+                # Real Iranian plates and showroom covers have reflective white/yellow/silver backgrounds.
+                # Hazard buttons, AC vents, and cluster plastic have median < 48 and mean < 58.
+                gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+                p80 = float(np.percentile(gray, 80))
+                med_val = float(np.median(gray))
+                mean_val = float(np.mean(gray))
+                if p80 < 70 or (med_val < 48 and mean_val < 58):
+                    continue
 
-            # 2. Reject red digital 7-segment odometer displays (e.g. bama_fhwthfsj_img2)
-            hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-            red_mask = ((hsv[:, :, 0] < 10) | (hsv[:, :, 0] > 170)) & (hsv[:, :, 1] > 100) & (hsv[:, :, 2] > 100)
-            if (red_mask.sum() / float(bw * bh)) > 0.035:
-                continue
+                # 2. Reject red digital 7-segment odometer displays (e.g. bama_fhwthfsj_img2)
+                hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+                red_mask = ((hsv[:, :, 0] < 10) | (hsv[:, :, 0] > 170)) & (hsv[:, :, 1] > 100) & (hsv[:, :, 2] > 100)
+                if (red_mask.sum() / float(bw * bh)) > 0.035:
+                    continue
 
-            # 3. Reject cabin multimedia / GPS navigation screens with high color saturation:
-            # Plates and dealer frames have neutral/monochrome centers (white, silver, black, yellow).
-            # LCD monitors showing blue maps or media have saturation > 120 across the center.
-            center_w = max(4, int(bw * 0.6))
-            cx_start = int(bw * 0.2)
-            center_hsv = hsv[:, cx_start:cx_start + center_w]
-            if center_hsv.size > 0 and float(np.mean(center_hsv[:, :, 1])) > 120.0:
-                continue
+                # 3. Reject cabin multimedia / GPS navigation screens with high color saturation:
+                # Plates and dealer frames have neutral/monochrome centers (white, silver, black, yellow).
+                # LCD monitors showing blue maps or media have saturation > 120 across the center.
+                center_w = max(4, int(bw * 0.6))
+                cx_start = int(bw * 0.2)
+                center_hsv = hsv[:, cx_start:cx_start + center_w]
+                if center_hsv.size > 0 and float(np.mean(center_hsv[:, :, 1])) > 120.0:
+                    continue
 
-            # 4. Detect tilt angle to filter out hood emblems (e.g. Peugeot lion, Mercedes star)
-            # A horizontal plate (angle < 6 deg) must have AR >= 2.2. If AR < 2.2, it is an emblem/grille!
-            candidate_tilt = detect_plate_tilt_angle(cv_img, (x1, y1, x2, y2))
-            if abs(candidate_tilt) < 6.0 and ar < 2.2:
-                continue
+                # 4. Detect tilt angle to filter out hood emblems (e.g. Peugeot lion, Mercedes star)
+                # A horizontal plate (angle < 6 deg) must have AR >= 2.2. If AR < 2.2, it is an emblem/grille!
+                candidate_tilt = detect_plate_tilt_angle(cv_img, (x1, y1, x2, y2))
+                if abs(candidate_tilt) < 6.0 and ar < 2.2:
+                    continue
 
-            # 4. Score weighting: Prioritize primary foreground vehicle
-            area_weight = (bw * bh) ** 0.25
-            score = conf * area_weight
+                # 4. Score weighting: Prioritize primary foreground vehicle
+                area_weight = (bw * bh) ** 0.25
+                score = conf * area_weight
 
-            if primary_car is not None:
-                cx1, cy1, cx2, cy2 = primary_car
-                pxc = (x1 + x2) // 2
-                pyc = (y1 + y2) // 2
-                # If plate is inside the primary foreground car, strongly prioritize
-                if cx1 <= pxc <= cx2 and cy1 <= pyc <= cy2:
-                    score *= 2.5
+                if primary_car is not None:
+                    cx1, cy1, cx2, cy2 = primary_car
+                    pxc = (x1 + x2) // 2
+                    pyc = (y1 + y2) // 2
+                    # If plate is inside the primary foreground car, strongly prioritize
+                    if cx1 <= pxc <= cx2 and cy1 <= pyc <= cy2:
+                        score *= 2.5
+                    else:
+                        score *= 0.35
+
+                valid_candidates.append({
+                    "box": (x1, y1, x2, y2),
+                    "conf": conf,
+                    "score": score,
+                    "src": src
+                })
+
+            # If plate detected, overlay branded plate badge
+            if valid_candidates:
+                # Select best candidate
+                best = max(valid_candidates, key=lambda c: c["score"])
+                x1, y1, x2, y2 = best["box"]
+                bw = x2 - x1
+                bh = y2 - y1
+                cx = (x1 + x2) // 2
+                cy = (y1 + y2) // 2
+
+                # Detect perspective tilt angle
+                tilt_angle = detect_plate_tilt_angle(cv_img, (x1, y1, x2, y2))
+
+                # If plate is tilted (angle >= 6°), overlay rotated metallic badge
+                if abs(tilt_angle) >= 6.0:
+                    plate_length = max(bw, bh)
+                    plate_thickness = max(16, int(plate_length / 4.4))
+                    result_img = overlay_rotated_plate_badge(
+                        cv_img,
+                        (cx, cy),
+                        plate_length,
+                        plate_thickness,
+                        tilt_angle,
+                        logo_path=logo_path
+                    )
                 else:
-                    score *= 0.35
-
-            valid_candidates.append({
-                "box": (x1, y1, x2, y2),
-                "conf": conf,
-                "score": score,
-                "src": src
-            })
-
-        # Step 4: If no plate detected, keep clean image
-        if not valid_candidates:
-            result_img = cv_img.copy()
-        else:
-            # Step 5: Select best candidate
-            best = max(valid_candidates, key=lambda c: c["score"])
-            x1, y1, x2, y2 = best["box"]
-            bw = x2 - x1
-            bh = y2 - y1
-            cx = (x1 + x2) // 2
-            cy = (y1 + y2) // 2
-
-            # Step 6: Detect perspective tilt angle
-            tilt_angle = detect_plate_tilt_angle(cv_img, (x1, y1, x2, y2))
-
-            # If plate is tilted (angle >= 6°), overlay snugly rotated metallic badge
-            if abs(tilt_angle) >= 6.0:
-                plate_length = max(bw, bh)
-                plate_thickness = max(16, int(plate_length / 4.4))
-                result_img = overlay_rotated_plate_badge(
-                    cv_img,
-                    (cx, cy),
-                    plate_length,
-                    plate_thickness,
-                    tilt_angle,
-                    logo_path=logo_path
-                )
-            else:
-                # Horizontal plate: Apply clean rectangular badge with strict height clamp
-                pad_x = max(2, int(bw * 0.05))
-                pad_y = max(2, int(bh * 0.08))
-                fx1 = max(0, x1 - pad_x)
-                fx2 = min(W, x2 + pad_x)
-                fy1 = max(0, y1 - pad_y)
-                fy2 = min(H, y2 + pad_y)
-                fbw = fx2 - fx1
-                fbh = fy2 - fy1
-
-                # Height clamp: Iranian plates have physical ratio ~4.7.
-                # Never allow badge height to exceed width / 3.8 to avoid covering bumper/hood
-                max_h = max(14, int(fbw / 3.8))
-                if fbh > max_h:
-                    b_cy = (fy1 + fy2) // 2
-                    fy1 = max(0, b_cy - max_h // 2)
-                    fy2 = min(H, fy1 + max_h)
+                    # Horizontal plate: Apply clean rectangular badge with strict height clamp
+                    pad_x = max(2, int(bw * 0.05))
+                    pad_y = max(2, int(bh * 0.08))
+                    fx1 = max(0, x1 - pad_x)
+                    fx2 = min(W, x2 + pad_x)
+                    fy1 = max(0, y1 - pad_y)
+                    fy2 = min(H, y2 + pad_y)
+                    fbw = fx2 - fx1
                     fbh = fy2 - fy1
 
-                badge_pil = create_branded_plate_badge(fbw, fbh, logo_path=logo_path)
-                badge_np = np.array(badge_pil)
-                badge_bgr = cv2.cvtColor(badge_np, cv2.COLOR_RGBA2BGR)
-                badge_alpha = (badge_np[:, :, 3] / 255.0)[:, :, np.newaxis]
+                    max_h = max(14, int(fbw / 3.8))
+                    if fbh > max_h:
+                        b_cy = (fy1 + fy2) // 2
+                        fy1 = max(0, b_cy - max_h // 2)
+                        fy2 = min(H, fy1 + max_h)
+                        fbh = fy2 - fy1
 
-                result_img = cv_img.copy()
-                roi = result_img[fy1:fy2, fx1:fx2]
-                result_img[fy1:fy2, fx1:fx2] = (roi * (1.0 - badge_alpha) + badge_bgr * badge_alpha).astype(np.uint8)
+                    badge_pil = create_branded_plate_badge(fbw, fbh, logo_path=logo_path)
+                    badge_np = np.array(badge_pil)
+                    badge_bgr = cv2.cvtColor(badge_np, cv2.COLOR_RGBA2BGR)
+                    badge_alpha = (badge_np[:, :, 3] / 255.0)[:, :, np.newaxis]
 
-        # Step 7: Top-right watermark is handled server-side by cars/image_utils.py
-        # to ensure single consistent branding, optimal scaling, and prevent double-watermarking.
-        # result_img = apply_top_right_watermark(result_img, watermark_path=watermark_path)
+                    roi = result_img[fy1:fy2, fx1:fx2]
+                    result_img[fy1:fy2, fx1:fx2] = (roi * (1.0 - badge_alpha) + badge_bgr * badge_alpha).astype(np.uint8)
+
+        except Exception as det_err:
+            logger.warning(f"Plate detection skipped or encountered error on {input_path}: {det_err}")
+
+        # Step 7: Top-right watermark branding (logo.webp)
+        # Always applied on EVERY image of every ad (whether plate was detected or not)
+        result_img = apply_top_right_watermark(result_img, watermark_path=watermark_path)
 
         # Step 8: Export WebP / JPEG
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
